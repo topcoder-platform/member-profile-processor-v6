@@ -1,0 +1,56 @@
+{
+  "name": "member-profile-processor-postgres",
+  "version": "2.0.0",
+  "description": "Member Profile Processor rebuilt with PostgreSQL and Prisma ORM",
+  "main": "dist/app.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "dev": "ts-node src/app.ts",
+    "dev:watch": "ts-node --watch src/app.ts",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "postinstall": "prisma generate",
+    "db:seed": "node scripts/seed-database.js",
+    "db:setup": "npm run prisma:migrate && npm run db:seed",
+    "db:check": "node scripts/check-db-data.js",
+    "kafka:test": "node scripts/kafka-test.js",
+    "kafka:autopilot": "node scripts/kafka-test.js autopilot",
+    "mock:api": "node scripts/mock-v5-api-server.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.1",
+    "axios": "^1.10.0",
+    "bluebird": "^3.7.2",
+    "config": "^3.3.9",
+    "dotenv": "^17.0.1",
+    "joi": "^17.11.0",
+    "kafkajs": "^2.2.4",
+    "lodash": "^4.17.21",
+    "superagent": "^8.1.2",
+    "tc-core-library-js": "topcoder-platform/tc-core-library-js.git#v2.6.4",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/bluebird": "^3.5.42",
+    "@types/config": "^3.3.3",
+    "@types/lodash": "^4.14.202",
+    "@types/node": "^20.10.4",
+    "@types/superagent": "^8.1.1",
+    "@typescript-eslint/eslint-plugin": "^6.13.2",
+    "@typescript-eslint/parser": "^6.13.2",
+    "eslint": "^8.55.0",
+    "jest": "^29.7.0",
+    "prisma": "^5.7.1",
+    "ts-jest": "^29.1.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
