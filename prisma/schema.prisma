@@ -1,0 +1,1602 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Prisma Schema for Topcoder Ratings Calculation Service
+// Transformed from Informix database to PostgreSQL
+//
+// This schema includes all tables used by the ratings-calculation-service
+// with audit fields (createdBy, createdAt, updatedBy, updatedAt) on all models
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+// ============================================================================
+// PROCESSOR-SPECIFIC MODELS (legacy/simple schema)
+// ============================================================================
+
+model Challenge {
+  id             Int                   @id @default(autoincrement())
+  legacyId       Int                   @unique
+  componentId    Int?
+  ratedInd       Int?
+  registrations  ProcessorUserChallenge[]
+  submissions    Submission[]
+  ratingHistory  ProcessorRatingHistory[]
+
+  @@map("challenges")
+}
+
+model ProcessorUser {
+  id             Int                   @id @default(autoincrement())
+  handle         String                @unique
+  rating         Int?                  @default(1200)
+  vol            Int?                  @default(300)
+  registrations  ProcessorUserChallenge[]
+  submissions    Submission[]
+  ratingHistory  ProcessorRatingHistory[]
+
+  @@map("users")
+}
+
+model ProcessorUserChallenge {
+  userId             Int
+  challengeId        Int
+  attended           String?
+  placed             Int?
+  oldRating          Int?   @map("old_rating")
+  oldVol             Int?   @map("old_vol")
+  newRating          Int?   @map("new_rating")
+  newVol             Int?   @map("new_vol")
+  systemPointTotal   Float? @map("system_point_total")
+  pointTotal         Float? @map("point_total")
+  ratedInd           Int?   @map("rated_ind")
+  user               ProcessorUser @relation(fields: [userId], references: [id])
+  challenge          Challenge     @relation(fields: [challengeId], references: [id])
+
+  @@id([userId, challengeId])
+  @@map("user_challenges")
+}
+
+model Submission {
+  id               String    @id @default(cuid())
+  challengeId      Int
+  userId           Int
+  score            Float?
+  initialScore     Float?
+  submissionTime   DateTime  @default(now())
+  submissionNumber Int
+  example          Int
+  openTime         DateTime
+  languageId       Int
+  challenge        Challenge     @relation(fields: [challengeId], references: [id])
+  user             ProcessorUser @relation(fields: [userId], references: [id])
+
+  @@map("submissions")
+}
+
+model ProcessorRatingHistory {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  challengeId Int
+  rating      Int
+  vol         Int
+  createdAt   DateTime  @default(now())
+  user        ProcessorUser @relation(fields: [userId], references: [id])
+  challenge   Challenge     @relation(fields: [challengeId], references: [id])
+
+  @@map("rating_history")
+}
+
+model ReviewType {
+  id       String  @id
+  name     String
+  isActive Boolean
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum CoderStatus {
+  A // Active
+  I // Inactive
+  U // Unverified
+}
+
+enum CoderType {
+  PROFESSIONAL
+  STUDENT
+}
+
+enum RoundTypeEnum {
+  SINGLE_ROUND_MATCH
+  TOURNAMENT_ROUND
+  MARATHON_MATCH
+  PRACTICE_ROUND
+  LONG_ROUND
+  AMD_ROUND
+  WEAKEST_LINK_ROUND
+  MODERATED_CHAT
+  PRIVATE_LABEL_TOURNAMENT
+  TEAM_SINGLE_ROUND_MATCH
+  TEAM_TOURNAMENT_ROUND
+  LONG_PROBLEM_ROUND
+  LONG_PROBLEM_TOURNAMENT_ROUND
+  INTEL_ROUND
+  HIGH_SCHOOL_SRM
+  EDUCATION_SRM
+}
+
+enum ProblemStatus {
+  ACTIVE
+  INACTIVE
+  USED
+  PROPOSED
+}
+
+enum EventType {
+  COMPETITION
+  REGISTRATION
+  ANNOUNCEMENT
+  MARATHON
+  SRM
+}
+
+enum TeamType {
+  NORMAL
+  SCHOOL
+  COMPANY
+  ALGORITHM
+}
+
+enum SkillStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum NotificationType {
+  EMAIL
+  SMS
+  PUSH
+}
+
+// ============================================================================
+// USER & CODER MODELS
+// ============================================================================
+
+/// Core user table storing basic user information
+model User {
+  id                  Int       @id @default(autoincrement())
+  handle              String    @unique @db.VarChar(50)
+  firstName           String?   @map("first_name") @db.VarChar(64)
+  lastName            String?   @map("last_name") @db.VarChar(64)
+  middleName          String?   @map("middle_name") @db.VarChar(64)
+  email               String?   @db.VarChar(100)
+  status              CoderStatus @default(A)
+  activationCode      String?   @map("activation_code") @db.VarChar(32)
+  memberSince         DateTime? @map("member_since")
+  lastSiteHitDate     DateTime? @map("last_site_hit_date")
+  regSource           String?   @map("reg_source") @db.VarChar(50)
+  utmSource           String?   @map("utm_source") @db.VarChar(50)
+  utmMedium           String?   @map("utm_medium") @db.VarChar(50)
+  utmCampaign         String?   @map("utm_campaign") @db.VarChar(50)
+
+  // Audit fields
+  createdAt           DateTime  @default(now()) @map("created_at")
+  createdBy           String?   @map("created_by") @db.VarChar(64)
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  updatedBy           String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coder               Coder?
+  roomResults         RoomResult[]
+  longCompResults     LongCompResult[]
+  achievements        UserAchievement[]
+  eventRegistrations  EventRegistration[]
+  notifications       UserNotification[]
+  teamMembers         TeamCoderXref[]
+  groupMemberships    UserGroupXref[]
+
+  @@index([handle])
+  @@index([email])
+  @@index([status])
+  @@map("user")
+}
+
+/// Extended coder profile with geographic and demographic information
+model Coder {
+  id                  Int       @id @default(autoincrement())
+  userId              Int       @unique @map("user_id")
+  stateCode           String?   @map("state_code") @db.VarChar(10)
+  countryCode         String?   @map("country_code") @db.VarChar(10)
+  compCountryCode     String?   @map("comp_country_code") @db.VarChar(10)
+  address1            String?   @db.VarChar(254)
+  address2            String?   @db.VarChar(254)
+  city                String?   @db.VarChar(64)
+  zip                 String?   @db.VarChar(16)
+  quote               String?   @db.Text
+  languageId          Int?      @map("language_id")
+  coderTypeId         Int?      @map("coder_type_id")
+
+  // Audit fields
+  createdAt           DateTime  @default(now()) @map("created_at")
+  createdBy           String?   @map("created_by") @db.VarChar(64)
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  updatedBy           String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  state               State?    @relation(fields: [stateCode], references: [stateCode])
+  country             Country?  @relation(fields: [countryCode], references: [countryCode])
+  compCountry         Country?  @relation("CompCountry", fields: [compCountryCode], references: [countryCode])
+  algoRatings         AlgoRating[]
+  algoRatingHistory   AlgoRatingHistory[]
+  skills              CoderSkillXref[]
+  images              CoderImageXref[]
+  currentSchool       CurrentSchool?
+  coderRanks          CoderRank[]
+  coderRankHistory    CoderRankHistory[]
+  countryRanks        CountryCoderRank[]
+  stateRanks          StateCoderRank[]
+  schoolRanks         SchoolCoderRank[]
+  streaks             Streak[]
+
+  @@index([userId])
+  @@index([countryCode])
+  @@index([stateCode])
+  @@index([coderTypeId])
+  @@map("coder")
+}
+
+// ============================================================================
+// GEOGRAPHIC MODELS
+// ============================================================================
+
+/// State/Province lookup table
+model State {
+  stateCode           String    @id @map("state_code") @db.VarChar(10)
+  stateName           String    @map("state_name") @db.VarChar(64)
+  modifyDate          DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt           DateTime  @default(now()) @map("created_at")
+  createdBy           String?   @map("created_by") @db.VarChar(64)
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  updatedBy           String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coders              Coder[]
+  schools             School[]
+  stateRanks          StateCoderRank[]
+
+  @@map("state")
+}
+
+/// Country lookup table
+model Country {
+  countryCode         String    @id @map("country_code") @db.VarChar(10)
+  countryName         String    @map("country_name") @db.VarChar(64)
+  participating       Int?      @default(0)
+  modifyDate          DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt           DateTime  @default(now()) @map("created_at")
+  createdBy           String?   @map("created_by") @db.VarChar(64)
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  updatedBy           String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coders              Coder[]
+  compCoders          Coder[]   @relation("CompCountry")
+  schools             School[]
+  countryRanks        CountryCoderRank[]
+
+  @@map("country")
+}
+
+// ============================================================================
+// RATING MODELS
+// ============================================================================
+
+/// Algorithm rating for coders (SRM and Marathon Match)
+model AlgoRating {
+  id                    Int       @id @default(autoincrement())
+  coderId               Int       @map("coder_id")
+  rating                Int       @default(0)
+  vol                   Int       @default(0) // Volatility
+  numRatings            Int       @default(0) @map("num_ratings")
+  algoRatingTypeId      Int       @map("algo_rating_type_id")
+  highestRating         Int?      @map("highest_rating")
+  lowestRating          Int?      @map("lowest_rating")
+  firstRatedRoundId     Int?      @map("first_rated_round_id")
+  lastRatedRoundId      Int?      @map("last_rated_round_id")
+  numCompetitions       Int?      @default(0) @map("num_competitions")
+  roundId               Int?      @map("round_id")
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coder                 Coder     @relation(fields: [coderId], references: [id], onDelete: Cascade)
+  ratingType            AlgoRatingType @relation(fields: [algoRatingTypeId], references: [id])
+  round                 Round?    @relation(fields: [roundId], references: [id])
+  firstRatedRound       Round?    @relation("FirstRatedRound", fields: [firstRatedRoundId], references: [id])
+  lastRatedRound        Round?    @relation("LastRatedRound", fields: [lastRatedRoundId], references: [id])
+
+  @@unique([coderId, algoRatingTypeId])
+  @@index([coderId])
+  @@index([algoRatingTypeId])
+  @@index([rating])
+  @@index([modifyDate])
+  @@map("algo_rating")
+}
+
+/// Algorithm rating type lookup (SRM, Marathon Match, etc.)
+model AlgoRatingType {
+  id                    Int       @id @default(autoincrement())
+  algoRatingTypeDesc    String    @map("algo_rating_type_desc") @db.VarChar(64)
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  algoRatings           AlgoRating[]
+  algoRatingHistory     AlgoRatingHistory[]
+  coderRanks            CoderRank[]
+  coderRankHistory      CoderRankHistory[]
+  countryRanks          CountryCoderRank[]
+  stateRanks            StateCoderRank[]
+  schoolRanks           SchoolCoderRank[]
+
+  @@map("algo_rating_type")
+}
+
+/// Historical rating data per round
+model AlgoRatingHistory {
+  id                    Int       @id @default(autoincrement())
+  coderId               Int       @map("coder_id")
+  roundId               Int       @map("round_id")
+  algoRatingTypeId      Int       @map("algo_rating_type_id")
+  rating                Int       @default(0)
+  vol                   Int       @default(0)
+  numRatings            Int       @default(0) @map("num_ratings")
+  numCompetitions       Int?      @default(0) @map("num_competitions")
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coder                 Coder     @relation(fields: [coderId], references: [id], onDelete: Cascade)
+  round                 Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  ratingType            AlgoRatingType @relation(fields: [algoRatingTypeId], references: [id])
+
+  @@unique([coderId, roundId, algoRatingTypeId])
+  @@index([coderId])
+  @@index([roundId])
+  @@index([algoRatingTypeId])
+  @@map("algo_rating_history")
+}
+
+// ============================================================================
+// RANKING MODELS
+// ============================================================================
+
+/// Overall coder rankings
+model CoderRank {
+  id                    Int       @id @default(autoincrement())
+  coderId               Int       @map("coder_id")
+  coderRankTypeId       Int       @map("coder_rank_type_id")
+  algoRatingTypeId      Int       @map("algo_rating_type_id")
+  percentile            Decimal?  @db.Decimal(7, 4)
+  rank                  Int?
+  rankNoTie             Int?      @map("rank_no_tie")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coder                 Coder     @relation(fields: [coderId], references: [id], onDelete: Cascade)
+  rankType              CoderRankType @relation(fields: [coderRankTypeId], references: [id])
+  ratingType            AlgoRatingType @relation(fields: [algoRatingTypeId], references: [id])
+
+  @@unique([coderId, coderRankTypeId, algoRatingTypeId])
+  @@index([coderId])
+  @@index([rank])
+  @@map("coder_rank")
+}
+
+/// Coder rank type lookup
+model CoderRankType {
+  id                    Int       @id @default(autoincrement())
+  coderRankTypeDesc     String    @map("coder_rank_type_desc") @db.VarChar(64)
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coderRanks            CoderRank[]
+  coderRankHistory      CoderRankHistory[]
+
+  @@map("coder_rank_type")
+}
+
+/// Historical coder rankings per round
+model CoderRankHistory {
+  id                    Int       @id @default(autoincrement())
+  coderId               Int       @map("coder_id")
+  roundId               Int       @map("round_id")
+  coderRankTypeId       Int       @map("coder_rank_type_id")
+  algoRatingTypeId      Int       @map("algo_rating_type_id")
+  percentile            Decimal?  @db.Decimal(7, 4)
+  rank                  Int?
+  rankNoTie             Int?      @map("rank_no_tie")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coder                 Coder     @relation(fields: [coderId], references: [id], onDelete: Cascade)
+  round                 Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  rankType              CoderRankType @relation(fields: [coderRankTypeId], references: [id])
+  ratingType            AlgoRatingType @relation(fields: [algoRatingTypeId], references: [id])
+
+  @@unique([coderId, roundId, coderRankTypeId, algoRatingTypeId])
+  @@index([coderId])
+  @@index([roundId])
+  @@map("coder_rank_history")
+}
+
+/// Country-level rankings
+model CountryCoderRank {
+  id                    Int       @id @default(autoincrement())
+  coderId               Int       @map("coder_id")
+  countryCode           String    @map("country_code") @db.VarChar(10)
+  algoRatingTypeId      Int       @map("algo_rating_type_id")
+  percentile            Decimal?  @db.Decimal(7, 4)
+  rank                  Int?
+  rankNoTie             Int?      @map("rank_no_tie")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coder                 Coder     @relation(fields: [coderId], references: [id], onDelete: Cascade)
+  country               Country   @relation(fields: [countryCode], references: [countryCode])
+  ratingType            AlgoRatingType @relation(fields: [algoRatingTypeId], references: [id])
+
+  @@unique([coderId, countryCode, algoRatingTypeId])
+  @@index([countryCode])
+  @@index([rank])
+  @@map("country_coder_rank")
+}
+
+/// State-level rankings
+model StateCoderRank {
+  id                    Int       @id @default(autoincrement())
+  coderId               Int       @map("coder_id")
+  stateCode             String    @map("state_code") @db.VarChar(10)
+  algoRatingTypeId      Int       @map("algo_rating_type_id")
+  percentile            Decimal?  @db.Decimal(7, 4)
+  rank                  Int?
+  rankNoTie             Int?      @map("rank_no_tie")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coder                 Coder     @relation(fields: [coderId], references: [id], onDelete: Cascade)
+  state                 State     @relation(fields: [stateCode], references: [stateCode])
+  ratingType            AlgoRatingType @relation(fields: [algoRatingTypeId], references: [id])
+
+  @@unique([coderId, stateCode, algoRatingTypeId])
+  @@index([stateCode])
+  @@index([rank])
+  @@map("state_coder_rank")
+}
+
+/// School-level rankings
+model SchoolCoderRank {
+  id                    Int       @id @default(autoincrement())
+  coderId               Int       @map("coder_id")
+  schoolId              Int       @map("school_id")
+  algoRatingTypeId      Int       @map("algo_rating_type_id")
+  percentile            Decimal?  @db.Decimal(7, 4)
+  rank                  Int?
+  rankNoTie             Int?      @map("rank_no_tie")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coder                 Coder     @relation(fields: [coderId], references: [id], onDelete: Cascade)
+  school                School    @relation(fields: [schoolId], references: [id])
+  ratingType            AlgoRatingType @relation(fields: [algoRatingTypeId], references: [id])
+
+  @@unique([coderId, schoolId, algoRatingTypeId])
+  @@index([schoolId])
+  @@index([rank])
+  @@map("school_coder_rank")
+}
+
+// ============================================================================
+// COMPETITION MODELS
+// ============================================================================
+
+/// Contest/Competition information
+model Contest {
+  id                    Int       @id @default(autoincrement())
+  name                  String?   @db.VarChar(128)
+  startDate             DateTime? @map("start_date")
+  endDate               DateTime? @map("end_date")
+  status                String?   @db.VarChar(1)
+  groupId               Int?      @map("group_id")
+  adText                String?   @map("ad_text") @db.Text
+  adStart               DateTime? @map("ad_start")
+  adEnd                 DateTime? @map("ad_end")
+  adTask                String?   @map("ad_task") @db.VarChar(30)
+  adCommand             String?   @map("ad_command") @db.VarChar(30)
+  activateMenu          Int?      @map("activate_menu")
+  seasonId              Int?      @map("season_id")
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  rounds                Round[]
+
+  @@index([name])
+  @@index([startDate])
+  @@map("contest")
+}
+
+/// Round information within a contest
+model Round {
+  id                    Int       @id @default(autoincrement())
+  contestId             Int?      @map("contest_id")
+  name                  String?   @db.VarChar(128)
+  status                String?   @db.VarChar(1)
+  registrationLimit     Int?      @map("registration_limit")
+  invitational          Int?      @default(0)
+  roundTypeId           Int?      @map("round_type_id")
+  shortName             String?   @map("short_name") @db.VarChar(64)
+  forumId               Int?      @map("forum_id")
+  ratedInd              Int?      @default(1) @map("rated_ind")
+  regionId              Int?      @map("region_id")
+  tcDirectProjectId     Int?      @map("tc_direct_project_id")
+  calendarId            Int?      @map("calendar_id")
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  contest               Contest?  @relation(fields: [contestId], references: [id])
+  roundType             RoundType? @relation(fields: [roundTypeId], references: [id])
+  calendar              Calendar? @relation(fields: [calendarId], references: [id])
+  rooms                 Room[]
+  roomResults           RoomResult[]
+  longCompResults       LongCompResult[]
+  algoRatings           AlgoRating[]
+  algoRatingsFirst      AlgoRating[] @relation("FirstRatedRound")
+  algoRatingsLast       AlgoRating[] @relation("LastRatedRound")
+  algoRatingHistory     AlgoRatingHistory[]
+  coderRankHistory      CoderRankHistory[]
+  roundComponents       RoundComponent[]
+  longSubmissions       LongSubmission[]
+  longProblemSubmissions LongProblemSubmission[]
+  longSystemTestResults LongSystemTestResult[]
+  streaks               Streak[]
+
+  @@index([contestId])
+  @@index([roundTypeId])
+  @@index([calendarId])
+  @@map("round")
+}
+
+/// Round type lookup
+model RoundType {
+  id                    Int       @id @default(autoincrement())
+  roundTypeDesc         String    @map("round_type_desc") @db.VarChar(64)
+  algoRatingTypeId      Int?      @map("algo_rating_type_id")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  rounds                Round[]
+
+  @@map("round_type_lu")
+}
+
+/// Room configuration for competitions
+model Room {
+  id                    Int       @id @default(autoincrement())
+  roundId               Int       @map("round_id")
+  name                  String?   @db.VarChar(64)
+  divisionId            Int?      @map("division_id")
+  roomNo                Int?      @map("room_no")
+  roomTypeId            Int?      @map("room_type_id")
+  eligible              Int?      @default(0)
+  adminRoom             Int?      @default(0) @map("admin_room")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  round                 Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  roomResults           RoomResult[]
+
+  @@index([roundId])
+  @@index([divisionId])
+  @@map("room")
+}
+
+/// SRM room results
+model RoomResult {
+  id                    Int       @id @default(autoincrement())
+  roundId               Int       @map("round_id")
+  roomId                Int       @map("room_id")
+  coderId               Int       @map("coder_id")
+  pointTotal            Decimal?  @map("point_total") @db.Decimal(14, 2)
+  roomSeed              Int?      @map("room_seed")
+  paid                  Decimal?  @db.Decimal(10, 2)
+  oldRating             Int?      @map("old_rating")
+  newRating             Int?      @map("new_rating")
+  oldVol                Int?      @map("old_vol")
+  newVol                Int?      @map("new_vol")
+  roomPlaced            Int?      @map("room_placed")
+  attended              String?   @db.VarChar(1)
+  advanced              String?   @db.VarChar(1)
+  overallRank           Int?      @map("overall_rank")
+  divisionSeed          Int?      @map("division_seed")
+  divisionPlaced        Int?      @map("division_placed")
+  ratedFlag             Int?      @default(0) @map("rated_flag")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  round                 Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  room                  Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user                  User      @relation(fields: [coderId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, coderId])
+  @@index([roundId])
+  @@index([roomId])
+  @@index([coderId])
+  @@map("room_result")
+}
+
+/// Marathon match competition results
+model LongCompResult {
+  id                    Int       @id @default(autoincrement())
+  roundId               Int       @map("round_id")
+  coderId               Int       @map("coder_id")
+  placed                Int?
+  pointTotal            Decimal?  @map("point_total") @db.Decimal(14, 2)
+  systemPointTotal      Decimal?  @map("system_point_total") @db.Decimal(14, 2)
+  oldRating             Int?      @map("old_rating")
+  newRating             Int?      @map("new_rating")
+  oldVol                Int?      @map("old_vol")
+  newVol                Int?      @map("new_vol")
+  attended              String?   @db.VarChar(1)
+  advanced              String?   @db.VarChar(1)
+  rated                 Int?      @default(0)
+  numSubmissions        Int?      @default(0) @map("num_submissions")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  round                 Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user                  User      @relation(fields: [coderId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, coderId])
+  @@index([roundId])
+  @@index([coderId])
+  @@map("long_comp_result")
+}
+
+// ============================================================================
+// PROBLEM MODELS
+// ============================================================================
+
+/// Problem/Challenge definitions
+model Problem {
+  id                    Int       @id @default(autoincrement())
+  name                  String?   @db.VarChar(128)
+  statusId              Int?      @map("status_id")
+  problemText           String?   @map("problem_text") @db.Text
+  problemTypeId         Int?      @map("problem_type_id")
+  proposedDifficultyId  Int?      @map("proposed_difficulty_id")
+  proposedDivisionId    Int?      @map("proposed_division_id")
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  status                ProblemStatus_LU? @relation(fields: [statusId], references: [id])
+  categories            ProblemCategoryXref[]
+  components            Component[]
+
+  @@index([statusId])
+  @@map("problem")
+}
+
+/// Problem status lookup
+model ProblemStatus_LU {
+  id                    Int       @id @default(autoincrement())
+  problemStatusDesc     String    @map("problem_status_desc") @db.VarChar(64)
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  problems              Problem[]
+
+  @@map("problem_status_lu")
+}
+
+/// Problem category cross-reference
+model ProblemCategoryXref {
+  id                    Int       @id @default(autoincrement())
+  problemId             Int       @map("problem_id")
+  categoryId            Int       @map("category_id")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  problem               Problem   @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([problemId, categoryId])
+  @@index([problemId])
+  @@index([categoryId])
+  @@map("problem_category_xref")
+}
+
+/// Component (problem component in a round)
+model Component {
+  id                    Int       @id @default(autoincrement())
+  problemId             Int?      @map("problem_id")
+  resultTypeId          Int?      @map("result_type_id")
+  methodName            String?   @map("method_name") @db.VarChar(64)
+  className             String?   @map("class_name") @db.VarChar(64)
+  defaultSolution       String?   @map("default_solution") @db.Text
+  componentTypeId       Int?      @map("component_type_id")
+  componentText         String?   @map("component_text") @db.Text
+  statusId              Int?      @map("status_id")
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  problem               Problem?  @relation(fields: [problemId], references: [id])
+  roundComponents       RoundComponent[]
+  longComponentStates   LongComponentState[]
+  longSubmissions       LongSubmission[]
+
+  @@index([problemId])
+  @@map("component")
+}
+
+/// Round-Component mapping
+model RoundComponent {
+  id                    Int       @id @default(autoincrement())
+  roundId               Int       @map("round_id")
+  componentId           Int       @map("component_id")
+  submitOrder           Int?      @map("submit_order")
+  divisionId            Int?      @map("division_id")
+  difficultyId          Int?      @map("difficulty_id")
+  points                Decimal?  @db.Decimal(10, 2)
+  openOrder             Int?      @map("open_order")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  round                 Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  component             Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  difficulty            Difficulty? @relation(fields: [difficultyId], references: [id])
+
+  @@unique([roundId, componentId, divisionId])
+  @@index([roundId])
+  @@index([componentId])
+  @@map("round_component")
+}
+
+/// Difficulty level lookup
+model Difficulty {
+  id                    Int       @id @default(autoincrement())
+  difficultyDesc        String    @map("difficulty_desc") @db.VarChar(64)
+  difficultyLevel       Int?      @map("difficulty_level")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  roundComponents       RoundComponent[]
+
+  @@map("difficulty")
+}
+
+/// Data type lookup
+model DataType {
+  id                    Int       @id @default(autoincrement())
+  dataTypeDesc          String    @map("data_type_desc") @db.VarChar(64)
+  language              Int?
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  @@map("data_type")
+}
+
+// ============================================================================
+// SUBMISSION & TEST MODELS (MARATHON MATCH)
+// ============================================================================
+
+/// Marathon match problem submission records
+model LongProblemSubmission {
+  id                    Int       @id @default(autoincrement())
+  roundId               Int       @map("round_id")
+  coderId               Int       @map("coder_id")
+  componentId           Int       @map("component_id")
+  submissionNumber      Int       @map("submission_number")
+  submissionText        String?   @map("submission_text") @db.Text
+  openTime              DateTime? @map("open_time")
+  submitTime            DateTime? @map("submit_time")
+  submissionPoints      Decimal?  @map("submission_points") @db.Decimal(14, 2)
+  languageId            Int?      @map("language_id")
+  example               Int?      @default(0)
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  round                 Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, coderId, componentId, submissionNumber, example])
+  @@index([roundId])
+  @@index([coderId])
+  @@map("long_problem_submission")
+}
+
+/// Long submission details
+model LongSubmission {
+  id                    Int       @id @default(autoincrement())
+  roundId               Int       @map("round_id")
+  coderId               Int       @map("coder_id")
+  componentId           Int       @map("component_id")
+  submissionNumber      Int       @map("submission_number")
+  submissionText        String?   @map("submission_text") @db.Text
+  submitTime            DateTime? @map("submit_time")
+  languageId            Int?      @map("language_id")
+  example               Int?      @default(0)
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  round                 Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  component             Component @relation(fields: [componentId], references: [id])
+
+  @@unique([roundId, coderId, componentId, submissionNumber, example])
+  @@index([roundId])
+  @@index([coderId])
+  @@map("long_submission")
+}
+
+/// Long component state tracking
+model LongComponentState {
+  id                    Int       @id @default(autoincrement())
+  roundId               Int       @map("round_id")
+  coderId               Int       @map("coder_id")
+  componentId           Int       @map("component_id")
+  points                Decimal?  @db.Decimal(14, 2)
+  statusId              Int?      @map("status_id")
+  submissionNumber      Int?      @map("submission_number")
+  exampleSubmissionNumber Int?    @map("example_submission_number")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  component             Component @relation(fields: [componentId], references: [id])
+
+  @@unique([roundId, coderId, componentId])
+  @@index([roundId])
+  @@index([coderId])
+  @@map("long_component_state")
+}
+
+/// Compilation information for long matches
+model LongCompilation {
+  id                    Int       @id @default(autoincrement())
+  roundId               Int       @map("round_id")
+  coderId               Int       @map("coder_id")
+  componentId           Int       @map("component_id")
+  submissionNumber      Int       @map("submission_number")
+  openTime              DateTime? @map("open_time")
+  compileTime           DateTime? @map("compile_time")
+  compileStatus         Int?      @map("compile_status")
+  languageId            Int?      @map("language_id")
+  compilationText       String?   @map("compilation_text") @db.Text
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  @@unique([roundId, coderId, componentId, submissionNumber])
+  @@index([roundId])
+  @@index([coderId])
+  @@map("long_compilation")
+}
+
+/// System test case definitions
+model SystemTestCase {
+  id                    Int       @id @default(autoincrement())
+  componentId           Int       @map("component_id")
+  testCaseId            Int       @map("test_case_id")
+  args                  String?   @db.Text
+  expectedResult        String?   @map("expected_result") @db.Text
+  modifyDate            DateTime? @map("modify_date")
+  example               Int?      @default(0)
+  systemFlag            Int?      @default(0) @map("system_flag")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  testResults           LongSystemTestResult[]
+
+  @@unique([componentId, testCaseId])
+  @@index([componentId])
+  @@map("system_test_case")
+}
+
+/// System test execution results
+model LongSystemTestResult {
+  id                    Int       @id @default(autoincrement())
+  roundId               Int       @map("round_id")
+  coderId               Int       @map("coder_id")
+  componentId           Int       @map("component_id")
+  testCaseId            Int       @map("test_case_id")
+  submissionNumber      Int       @map("submission_number")
+  testAction            String?   @map("test_action") @db.VarChar(10)
+  receivedValue         String?   @map("received_value") @db.Text
+  score                 Decimal?  @db.Decimal(14, 2)
+  processingTime        Int?      @map("processing_time")
+  fatal                 Int?      @default(0)
+  timestamp             DateTime?
+  viewable              Int?      @default(0)
+  message               String?   @db.Text
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  round                 Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  testCase              SystemTestCase @relation(fields: [componentId, testCaseId], references: [componentId, testCaseId], onDelete: Cascade)
+
+  @@unique([roundId, coderId, componentId, testCaseId, submissionNumber])
+  @@index([roundId])
+  @@index([coderId])
+  @@map("long_system_test_result")
+}
+
+// ============================================================================
+// SKILL MODELS
+// ============================================================================
+
+/// Skill type lookup
+model SkillType {
+  id                    Int       @id @default(autoincrement()) @map("skill_type_id")
+  skillTypeDesc         String    @map("skill_type_desc") @db.VarChar(64)
+  skillTypeOrder        Int?      @map("skill_type_order")
+  status                String?   @db.VarChar(1)
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  skills                Skill[]
+
+  @@map("skill_type_lu")
+}
+
+/// Skill definitions
+model Skill {
+  id                    Int       @id @default(autoincrement()) @map("skill_id")
+  skillTypeId           Int       @map("skill_type_id")
+  skillDesc             String    @map("skill_desc") @db.VarChar(64)
+  status                String?   @db.VarChar(1)
+  skillOrder            Int?      @map("skill_order")
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  skillType             SkillType @relation(fields: [skillTypeId], references: [id])
+  coderSkills           CoderSkillXref[]
+
+  @@index([skillTypeId])
+  @@map("skill")
+}
+
+/// Coder-Skill cross-reference
+model CoderSkillXref {
+  id                    Int       @id @default(autoincrement())
+  coderId               Int       @map("coder_id")
+  skillId               Int       @map("skill_id")
+  skillTypeId           Int?      @map("skill_type_id")
+  ranking               Int?
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coder                 Coder     @relation(fields: [coderId], references: [id], onDelete: Cascade)
+  skill                 Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([coderId, skillId])
+  @@index([coderId])
+  @@index([skillId])
+  @@map("coder_skill_xref")
+}
+
+// ============================================================================
+// SCHOOL MODELS
+// ============================================================================
+
+/// School information
+model School {
+  id                    Int       @id @default(autoincrement()) @map("school_id")
+  name                  String    @db.VarChar(128)
+  shortName             String?   @map("short_name") @db.VarChar(64)
+  sortLetter            String?   @map("sort_letter") @db.VarChar(1)
+  city                  String?   @db.VarChar(64)
+  stateCode             String?   @map("state_code") @db.VarChar(10)
+  countryCode           String?   @map("country_code") @db.VarChar(10)
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  state                 State?    @relation(fields: [stateCode], references: [stateCode])
+  country               Country?  @relation(fields: [countryCode], references: [countryCode])
+  currentSchools        CurrentSchool[]
+  teams                 Team[]
+  schoolRanks           SchoolCoderRank[]
+
+  @@index([name])
+  @@index([stateCode])
+  @@index([countryCode])
+  @@map("school")
+}
+
+/// Current school association for coders
+model CurrentSchool {
+  id                    Int       @id @default(autoincrement())
+  coderId               Int       @unique @map("coder_id")
+  schoolId              Int       @map("school_id")
+  gpa                   Decimal?  @db.Decimal(5, 2)
+  gpaScale              Decimal?  @map("gpa_scale") @db.Decimal(5, 2)
+  viewable              Int?      @default(1)
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coder                 Coder     @relation(fields: [coderId], references: [id], onDelete: Cascade)
+  school                School    @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId])
+  @@map("current_school")
+}
+
+// ============================================================================
+// TEAM MODELS
+// ============================================================================
+
+/// Team information
+model Team {
+  id                    Int       @id @default(autoincrement()) @map("team_id")
+  name                  String    @db.VarChar(128)
+  teamType              Int?      @map("team_type")
+  schoolId              Int?      @map("school_id")
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  school                School?   @relation(fields: [schoolId], references: [id])
+  members               TeamCoderXref[]
+
+  @@index([name])
+  @@index([schoolId])
+  @@map("team")
+}
+
+/// Team-Coder cross-reference
+model TeamCoderXref {
+  id                    Int       @id @default(autoincrement())
+  teamId                Int       @map("team_id")
+  coderId               Int       @map("coder_id")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  team                  Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user                  User      @relation(fields: [coderId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, coderId])
+  @@index([teamId])
+  @@index([coderId])
+  @@map("team_coder_xref")
+}
+
+// ============================================================================
+// GROUP MODELS
+// ============================================================================
+
+/// User-Group cross-reference
+model UserGroupXref {
+  id                    Int       @id @default(autoincrement())
+  userId                Int       @map("user_id")
+  groupId               Int       @map("group_id")
+  createDate            DateTime? @map("create_date")
+  securityStatusId      Int?      @map("security_status_id")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([userId])
+  @@index([groupId])
+  @@map("user_group_xref")
+}
+
+// ============================================================================
+// IMAGE MODELS
+// ============================================================================
+
+/// Image file information
+model Image {
+  id                    Int       @id @default(autoincrement()) @map("image_id")
+  fileName              String    @map("file_name") @db.VarChar(255)
+  imageTypeId           Int       @map("image_type_id")
+  pathId                Int?      @map("path_id")
+  link                  String?   @db.VarChar(255)
+  height                Int?
+  width                 Int?
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  path                  Path?     @relation(fields: [pathId], references: [id])
+  coderImages           CoderImageXref[]
+
+  @@index([imageTypeId])
+  @@index([pathId])
+  @@map("image")
+}
+
+/// File path information
+model Path {
+  id                    Int       @id @default(autoincrement()) @map("path_id")
+  path                  String    @db.VarChar(255)
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  images                Image[]
+
+  @@map("path")
+}
+
+/// Coder-Image cross-reference
+model CoderImageXref {
+  id                    Int       @id @default(autoincrement())
+  coderId               Int       @map("coder_id")
+  imageId               Int       @map("image_id")
+  displayFlag           Int?      @default(1) @map("display_flag")
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coder                 Coder     @relation(fields: [coderId], references: [id], onDelete: Cascade)
+  image                 Image     @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  @@unique([coderId, imageId])
+  @@index([coderId])
+  @@index([imageId])
+  @@map("coder_image_xref")
+}
+
+// ============================================================================
+// ACHIEVEMENT MODELS
+// ============================================================================
+
+/// User achievements
+model UserAchievement {
+  id                    Int       @id @default(autoincrement())
+  userId                Int       @map("user_id")
+  achievementTypeId     Int       @map("achievement_type_id")
+  achievementDate       DateTime? @map("achievement_date")
+  description           String?   @db.VarChar(255)
+  achievementTypeDesc   String?   @map("achievement_type_desc") @db.VarChar(64)
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementType       AchievementType @relation(fields: [achievementTypeId], references: [id])
+
+  @@index([userId])
+  @@index([achievementTypeId])
+  @@map("user_achievement")
+}
+
+/// Achievement type lookup
+model AchievementType {
+  id                    Int       @id @default(autoincrement()) @map("achievement_type_id")
+  achievementTypeDesc   String    @map("achievement_type_desc") @db.VarChar(64)
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  achievements          UserAchievement[]
+
+  @@map("achievement_type_lu")
+}
+
+/// Streak tracking (e.g., consecutive participations)
+model Streak {
+  id                    Int       @id @default(autoincrement())
+  coderId               Int       @map("coder_id")
+  streakTypeId          Int       @map("streak_type_id")
+  startRoundId          Int?      @map("start_round_id")
+  endRoundId            Int?      @map("end_round_id")
+  length                Int?
+  isActive              Int?      @default(0) @map("is_active")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  coder                 Coder     @relation(fields: [coderId], references: [id], onDelete: Cascade)
+  startRound            Round?    @relation(fields: [startRoundId], references: [id])
+
+  @@index([coderId])
+  @@index([streakTypeId])
+  @@map("streak")
+}
+
+// ============================================================================
+// EVENT MODELS
+// ============================================================================
+
+/// Event definitions
+model Event {
+  id                    Int       @id @default(autoincrement()) @map("event_id")
+  eventTypeId           Int       @map("event_type_id")
+  eventTypeDesc         String?   @map("event_type_desc") @db.VarChar(64)
+  eventDesc             String?   @map("event_desc") @db.VarChar(255)
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  eventType             EventTypeLU @relation(fields: [eventTypeId], references: [id])
+  registrations         EventRegistration[]
+
+  @@index([eventTypeId])
+  @@map("event")
+}
+
+/// Event type lookup
+model EventTypeLU {
+  id                    Int       @id @default(autoincrement()) @map("event_type_id")
+  eventTypeDesc         String    @map("event_type_desc") @db.VarChar(64)
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  events                Event[]
+
+  @@map("event_type_lu")
+}
+
+/// Event registrations
+model EventRegistration {
+  id                    Int       @id @default(autoincrement())
+  eventId               Int       @map("event_id")
+  userId                Int       @map("user_id")
+  eligibleInd           Int?      @map("eligible_ind")
+  notes                 String?   @db.Text
+  modifyDate            DateTime? @map("modify_date")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  event                 Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+  @@map("event_registration")
+}
+
+// ============================================================================
+// NOTIFICATION MODELS
+// ============================================================================
+
+/// User notification preferences
+model UserNotification {
+  id                    Int       @id @default(autoincrement())
+  userId                Int       @map("user_id")
+  notifyId              Int       @map("notify_id")
+  name                  String?   @db.VarChar(64)
+  status                String?   @db.VarChar(1)
+  notifyTypeId          Int?      @map("notify_type_id")
+  notifyTypeDesc        String?   @map("notify_type_desc") @db.VarChar(64)
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notifyId])
+  @@index([userId])
+  @@map("user_notification")
+}
+
+// ============================================================================
+// CALENDAR & TIME MODELS
+// ============================================================================
+
+/// Calendar dimension table
+model Calendar {
+  id                    Int       @id @default(autoincrement()) @map("calendar_id")
+  year                  Int?
+  monthNumeric          Int?      @map("month_numeric")
+  monthAlphaLong        String?   @map("month_alpha_long") @db.VarChar(20)
+  monthAlphaShort       String?   @map("month_alpha_short") @db.VarChar(10)
+  dayOfMonth            Int?      @map("day_of_month")
+  dayOfWeekNumeric      Int?      @map("day_of_week_numeric")
+  dayOfWeekAlphaLong    String?   @map("day_of_week_alpha_long") @db.VarChar(20)
+  dayOfWeekAlphaShort   String?   @map("day_of_week_alpha_short") @db.VarChar(10)
+  dayOfYear             Int?      @map("day_of_year")
+  weekOfYear            Int?      @map("week_of_year")
+  quarter               Int?
+  date                  DateTime?
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  rounds                Round[]
+  updateLogs            UpdateLog[]
+
+  @@index([date])
+  @@index([year, monthNumeric])
+  @@map("calendar")
+}
+
+/// Time dimension table
+model Time {
+  id                    Int       @id @default(autoincrement()) @map("time_id")
+  hour                  Int?
+  minute                Int?
+  meridiem              String?   @db.VarChar(2)
+  hourMinute            String?   @map("hour_minute") @db.VarChar(10)
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  @@map("time")
+}
+
+// ============================================================================
+// LOGGING MODELS
+// ============================================================================
+
+/// Update/sync log table
+model UpdateLog {
+  id                    Int       @id @default(autoincrement()) @map("log_id")
+  calendarId            Int?      @map("calendar_id")
+  timestamp             DateTime?
+  logTypeId             Int       @map("log_type_id")
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  // Relations
+  calendar              Calendar? @relation(fields: [calendarId], references: [id])
+
+  @@index([logTypeId])
+  @@index([timestamp])
+  @@map("update_log")
+}
