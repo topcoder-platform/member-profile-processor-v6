@@ -27,6 +27,21 @@ async function checkDatabaseData() {
       });
     }
 
+    // Check project_info mappings used for round lookup
+    const projectMappings = await prisma.projectInfo.findMany({
+      where: { projectInfoTypeId: 56 },
+      take: 5,
+      orderBy: { projectId: 'desc' }
+    });
+
+    console.log('\n🗺️ Project mappings found:', projectMappings.length);
+    if (projectMappings.length > 0) {
+      console.log('Sample project mappings:');
+      projectMappings.forEach(mapping => {
+        console.log(`- Project ID: ${mapping.projectId} -> Round ID: ${mapping.value} (type ${mapping.projectInfoTypeId})`);
+      });
+    }
+
     // Check users
     const users = await prisma.user.findMany({
       take: 5,
@@ -89,10 +104,10 @@ async function checkDatabaseData() {
     console.log('\n🎯 Sample Data for Kafka Messages:');
     console.log('=====================================');
 
-    if (rounds.length > 0) {
-      const sampleRound = rounds[0];
-      console.log(`Round ID (tcDirectProjectId): ${sampleRound.tcDirectProjectId || 'N/A'}`);
-      console.log(`Round ID (primary key): ${sampleRound.id}`);
+    if (projectMappings.length > 0) {
+      const sampleMapping = projectMappings[0];
+      console.log(`Project ID (legacyId): ${sampleMapping.projectId}`);
+      console.log(`Mapped Round ID: ${sampleMapping.value}`);
     }
 
     if (users.length > 0) {

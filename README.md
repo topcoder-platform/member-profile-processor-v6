@@ -2,6 +2,8 @@
 
 A service that processes Marathon Match competition events to update member profiles and calculate ratings.
 
+Round lookup for MM calculation follows the legacy mapping through `project_info` (`project_info_type_id = 56`): `legacyId/projectId -> roundId`.
+
 ## Quick Start
 
 1. **Install dependencies**
@@ -66,6 +68,8 @@ npm run kafka:autopilot
 # Show help
 npm run kafka:test help
 ```
+
+`kafka:autopilot` sends `projectId=40000001` by default (seeded in `project_info`).
 
 ## Mock API Server
 

@@ -10,7 +10,7 @@ const querystring = require('querystring');
 // Mock data for challenges
 const challenge1 = {
   id: '30000001-1234-5678-9abc-def123456789',
-  legacyId: 30000001,
+  legacyId: 40000001,
   name: 'Marathon Match Challenge 1',
   type: 'Code',
   status: 'Active',
@@ -22,7 +22,7 @@ const challenge1 = {
 
 const challenge2 = {
   id: '30000002-1234-5678-9abc-def123456789',
-  legacyId: 30000002,
+  legacyId: 40000002,
   name: 'Marathon Match Challenge 2',
   type: 'Code',
   status: 'Active',
@@ -33,7 +33,7 @@ const challenge2 = {
 
 const challenge3 = {
   id: '30054163-1234-5678-9abc-def123456789',
-  legacyId: 30054163,
+  legacyId: 40054163,
   name: 'Test Scenario Challenge',
   type: 'Code',
   status: 'Completed',

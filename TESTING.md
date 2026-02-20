@@ -64,8 +64,8 @@ The seed data includes the following scenarios for validation:
 
 ## Round ID Mapping
 
-The calculation maps the legacy project ID to `round.tcDirectProjectId`. Ensure your test data
-sets this field if you are using `kafka:autopilot`.
+The calculation maps legacy project IDs through `project_info` with `project_info_type_id = 56`.
+Ensure your test data has `project_info.project_id -> project_info.value (round_id)` mappings.
 
 ## Message Flow
 

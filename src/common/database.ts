@@ -26,19 +26,22 @@ class DatabaseService {
   /**
    * Get round ID for the given legacy challenge ID
    * Replaces the original getRoundId function
-   * @param legacyId - Legacy challenge ID (tcDirectProjectId)
+   * @param legacyId - Legacy challenge/project ID
    * @returns roundId corresponding to the legacy ID
    */
   async getChallengeId(legacyId: number): Promise<number | null> {
     try {
-      logger.info(`Getting round information for legacy ID: ${legacyId}`);
+      logger.info(`Getting round information for legacy ID via project_info: ${legacyId}`);
 
-      const round = await this.prisma.round.findFirst({
-        where: { tcDirectProjectId: legacyId },
-        select: { id: true }
+      const projectInfo = await this.prisma.projectInfo.findFirst({
+        where: {
+          projectId: legacyId,
+          projectInfoTypeId: 56
+        },
+        select: { value: true }
       });
 
-      return round?.id ? Number(round.id) : null;
+      return projectInfo?.value ? Number(projectInfo.value) : null;
     } catch (error) {
       logger.error('Error getting round ID', { legacyId, error });
       throw error;

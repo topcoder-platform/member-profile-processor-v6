@@ -559,6 +559,23 @@ model SchoolCoderRank {
 // ============================================================================
 
 /// Contest/Competition information
+model ProjectInfo {
+  projectId             Int       @map("project_id")
+  projectInfoTypeId     Int       @map("project_info_type_id")
+  value                 Int
+
+  // Audit fields
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.VarChar(64)
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  updatedBy             String?   @map("updated_by") @db.VarChar(64)
+
+  @@id([projectId, projectInfoTypeId])
+  @@index([value])
+  @@map("project_info")
+}
+
+/// Contest/Competition information
 model Contest {
   id                    Int       @id @default(autoincrement())
   name                  String?   @db.VarChar(128)

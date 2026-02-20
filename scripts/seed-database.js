@@ -9,9 +9,15 @@ const prisma = new PrismaClient();
 // Static test data
 const STATIC_DATA = {
   rounds: [
-    { id: 30000001, name: 'Marathon Match Round 1', ratedInd: 1, tcDirectProjectId: 30000001 },
-    { id: 30000002, name: 'Marathon Match Round 2', ratedInd: 1, tcDirectProjectId: 30000002 },
-    { id: 30000003, name: 'Marathon Match Round 3 (Single Competitor)', ratedInd: 1, tcDirectProjectId: 30000003 }
+    { id: 30000001, name: 'Marathon Match Round 1', ratedInd: 1 },
+    { id: 30000002, name: 'Marathon Match Round 2', ratedInd: 1 },
+    { id: 30000003, name: 'Marathon Match Round 3 (Single Competitor)', ratedInd: 1 }
+  ],
+
+  projectInfo: [
+    { projectId: 40000001, projectInfoTypeId: 56, value: 30000001 },
+    { projectId: 40000002, projectInfoTypeId: 56, value: 30000002 },
+    { projectId: 40000003, projectInfoTypeId: 56, value: 30000003 }
   ],
 
   users: [
@@ -112,6 +118,7 @@ async function seedDatabase() {
     await prisma.algoRating.deleteMany();
     await prisma.coder.deleteMany();
     await prisma.user.deleteMany();
+    await prisma.projectInfo.deleteMany();
     await prisma.round.deleteMany();
     await prisma.algoRatingType.deleteMany();
 
@@ -130,6 +137,13 @@ async function seedDatabase() {
       STATIC_DATA.rounds.map(round => prisma.round.create({ data: round }))
     );
     console.log(`✅ Inserted ${createdRounds.length} rounds\n`);
+
+    // Insert project_info mapping (legacy projectId -> roundId)
+    console.log('🗺️  Inserting project_info mappings...');
+    await prisma.projectInfo.createMany({
+      data: STATIC_DATA.projectInfo
+    });
+    console.log(`✅ Inserted ${STATIC_DATA.projectInfo.length} project_info mappings\n`);
 
     // Insert users
     console.log('👥 Inserting users...');
@@ -172,6 +186,7 @@ async function seedDatabase() {
     console.log('🎉 Database seeding completed successfully!');
     console.log('\n📊 Summary:');
     console.log(`   - Rounds: ${createdRounds.length}`);
+    console.log(`   - ProjectInfo mappings: ${STATIC_DATA.projectInfo.length}`);
     console.log(`   - Users: ${createdUsers.length}`);
     console.log(`   - Coders: ${createdCoders.length}`);
     console.log(`   - Long Comp Results: ${longCompResults.length}`);
@@ -180,8 +195,9 @@ async function seedDatabase() {
     // Sample data for testing
     console.log('\n🎯 Sample Data for Testing:');
     console.log('============================');
-    console.log(`Sample Round ID (legacyId): ${createdRounds[0].id}`);
-    console.log(`Single Competitor Round ID: ${createdRounds[2].id}`);
+    console.log(`Sample Project ID (legacyId): ${STATIC_DATA.projectInfo[0].projectId}`);
+    console.log(`Mapped Round ID: ${STATIC_DATA.projectInfo[0].value}`);
+    console.log(`Single Competitor Project ID: ${STATIC_DATA.projectInfo[2].projectId}`);
     console.log(`Sample User Handle: ${createdUsers[0].handle}`);
     console.log(`User Without Coder: ${createdUsers.find(u => u.handle === 'no_coder_user').handle}`);
 
@@ -207,12 +223,20 @@ async function addTestScenarioData() {
   try {
     console.log('\n🧪 Adding specific test scenario data...');
 
-    // Add the specific round used in testing (legacyId: 30054163)
+    // Add the specific round used in testing via project_info mapping
     const testRound = await prisma.round.create({
       data: {
         id: 30054163,
         name: 'Test Marathon Match Round',
         ratedInd: 1
+      }
+    });
+
+    await prisma.projectInfo.create({
+      data: {
+        projectId: 40054163,
+        projectInfoTypeId: 56,
+        value: testRound.id
       }
     });
 
@@ -250,6 +274,7 @@ async function addTestScenarioData() {
     });
 
     console.log('✅ Test scenario data added');
+    console.log('   - Test Project ID: 40054163');
     console.log(`   - Test Round: ${testRound.id}`);
     console.log(`   - Test User: ${testUser.handle}`);
   } catch (error) {

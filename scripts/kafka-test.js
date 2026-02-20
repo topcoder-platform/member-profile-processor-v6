@@ -28,7 +28,7 @@ const messages = {
         timestamp: new Date().toISOString(),
         payload: {
           date: new Date().toISOString(),
-          projectId: 30000001,     // Use static round tcDirectProjectId from seed data
+          projectId: 40000001,     // Use static project_info.project_id from seed data
           phaseId: 1018098,
           phaseTypeName: 'Review',    // Must be 'Review'
           state: 'END',               // Must be 'END'
@@ -140,9 +140,9 @@ Prerequisites:
   3. Database setup with test data (npm run db:seed)
 
 Available Challenge IDs for Testing:
-  - 30000001 (main)
-  - 30000002
-  - 30000003 (single competitor)
+  - 40000001 (main)
+  - 40000002
+  - 40000003 (single competitor)
 
 Expected Flow:
   1. autopilot → calculate() → runs Qubits + updates DB
