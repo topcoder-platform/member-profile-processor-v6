@@ -9,10 +9,24 @@ import logger from './logger';
 
 class DatabaseService {
   private prisma: PrismaClient;
+  private dwPrisma: PrismaClient;
 
   constructor() {
+    const logLevels: ('query' | 'info' | 'warn' | 'error')[] = ['query', 'info', 'warn', 'error'];
+
     this.prisma = new PrismaClient({
-      log: ['query', 'info', 'warn', 'error'],
+      log: logLevels,
+    });
+
+    this.dwPrisma = new PrismaClient({
+      // Keep a dedicated DW client so OLTP and DW access are explicitly separated.
+      log: logLevels,
+      datasources: {
+        db: {
+          // Fallback keeps local dev simple when DATABASE_URL_DW is not separately set.
+          url: process.env.DATABASE_URL_DW || process.env.DATABASE_URL
+        }
+      }
     });
   }
 
@@ -21,6 +35,20 @@ class DatabaseService {
    */
   getClient(): PrismaClient {
     return this.prisma;
+  }
+
+  /**
+   * Get explicit OLTP Prisma client instance.
+   */
+  getPublicClient(): PrismaClient {
+    return this.prisma;
+  }
+
+  /**
+   * Get explicit DW Prisma client instance.
+   */
+  getDwClient(): PrismaClient {
+    return this.dwPrisma;
   }
 
   /**
@@ -231,6 +259,10 @@ class DatabaseService {
         return;
       }
 
+      // The legacy flow relied on DB-side modify_date updates; in Postgres we need
+      // to stamp the row explicitly so incremental CodersToDW sync can pick it up.
+      const modifyDate = new Date();
+
       for (const data of validRatingData) {
         const coder = await this.prisma.coder.findUnique({
           where: { id: data.coderId },
@@ -285,7 +317,8 @@ class DatabaseService {
             rating: data.rating,
             vol: data.vol,
             roundId,
-            numRatings: { increment: 1 }
+            numRatings: { increment: 1 },
+            modifyDate
           },
           create: {
             coderId: data.coderId,
@@ -293,7 +326,8 @@ class DatabaseService {
             rating: data.rating,
             vol: data.vol,
             roundId,
-            numRatings: 1
+            numRatings: 1,
+            modifyDate
           }
         });
 
@@ -318,6 +352,7 @@ class DatabaseService {
    */
   async disconnect() {
     await this.prisma.$disconnect();
+    await this.dwPrisma.$disconnect();
   }
 }
 

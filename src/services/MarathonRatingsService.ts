@@ -8,6 +8,8 @@ import * as helper from '../common/helper';
 import database from '../common/database';
 import logger, { buildService } from '../common/logger';
 import { AlgorithmQubits } from '../libs/algorithm/AlgorithmQubits';
+import marathonLoadRatingsToDWService from './MarathonLoadRatingsToDWService';
+import marathonLoadCodersToDWService from './MarathonLoadCodersToDWService';
 
 /**
  * Calculate ratings for a Marathon Match challenge
@@ -35,7 +37,6 @@ export async function calculate(challengeId: string, legacyId: number): Promise<
     logger.debug(`Submissions: ${JSON.stringify(submissions)}`);
     logger.debug(`Final submissions: ${JSON.stringify(finalSubmissions)}`);
 
-
     // Update LCR entries for members who submitted and have attended='N' (same logic as original)
     // aync to avoid race condition where new attendees can be missed
     await Promise.all(
@@ -54,8 +55,8 @@ export async function calculate(challengeId: string, legacyId: number): Promise<
     await algo.runProcess(dbRoundId);
 
     // After calculation completes, trigger loadCoders and loadRatings
-    await loadCoders(challengeId);
-    await loadRatings(challengeId);
+    await loadCoders(dbRoundId);
+    await loadRatings(dbRoundId);
 
     logger.debug('=== Marathon Match ratings calculation success ===');
   } catch (error) {
@@ -71,11 +72,11 @@ export async function calculate(challengeId: string, legacyId: number): Promise<
  * Load ratings data to data warehouse
  * Follows the exact same logic as the original loadRatings function
  */
-export async function loadRatings(challengeId: string): Promise<void> {
+export async function loadRatings(roundId: number): Promise<void> {
   try {
     logger.debug('=== Load Ratings start ===');
 
-    await helper.initiateLoadRatings(challengeId);
+    await marathonLoadRatingsToDWService.loadRatingsToDW(roundId);
 
     logger.debug('=== Load Ratings end ===');
   } catch (error) {
@@ -88,11 +89,11 @@ export async function loadRatings(challengeId: string): Promise<void> {
  * Load coders data to data warehouse
  * Follows the exact same logic as the original loadCoders function
  */
-export async function loadCoders(challengeId: string): Promise<void> {
+export async function loadCoders(roundId: number): Promise<void> {
   try {
     logger.debug('=== Load Coders start ===');
 
-    await helper.initiateLoadCoders(challengeId);
+    await marathonLoadCodersToDWService.loadCodersToDW(roundId);
 
     logger.debug('=== Load Coders end ===');
   } catch (error) {

@@ -45,7 +45,7 @@ export async function handle(message: KafkaMessage): Promise<void> {
         (message.payload as AutopilotPayload).state.toLowerCase() === 'end'
       ) {
         const payload = message.payload as AutopilotPayload;
-        
+
         // Get the challenge details (same as original)
         const challengeDetails = await helper.getChallengeDetails({
           legacyId: payload.projectId
@@ -59,36 +59,7 @@ export async function handle(message: KafkaMessage): Promise<void> {
       break;
 
     case config.KAFKA_RATING_SERVICE_TOPIC:
-      // Handle rating service messages (same logic as original)
-      if (message.originator === 'rating.calculation.service') {
-        const payload = message.payload as RatingServicePayload;
-        
-        if (
-          payload.event === 'RATINGS_CALCULATION' &&
-          payload.status === 'SUCCESS'
-        ) {
-          // Original used roundId, but we need to adapt to challengeId
-          // For backwards compatibility, we'll handle both challengeId and roundId
-          if (payload.challengeId) {
-            await MarathonRatingsService.loadCoders(payload.challengeId);
-          } else if (payload.roundId) {
-            // For legacy messages with roundId, we'd need to convert to challengeId
-            // This is a temporary solution until all services are updated
-            logger.warn('Received legacy roundId message, this should be updated to use challengeId', { roundId: payload.roundId });
-            // Skip for now since we can't convert roundId to challengeId without additional mapping
-          }
-        } else if (
-          payload.event === 'LOAD_CODERS' &&
-          payload.status === 'SUCCESS'
-        ) {
-          if (payload.challengeId) {
-            await MarathonRatingsService.loadRatings(payload.challengeId);
-          } else if (payload.roundId) {
-            logger.warn('Received legacy roundId message, this should be updated to use challengeId', { roundId: payload.roundId });
-            // Skip for now since we can't convert roundId to challengeId without additional mapping
-          }
-        }
-      }
+      logger.info('Skipping rating-service Kafka handling for load-ratings flow; calculate path is canonical');
       break;
 
     default:

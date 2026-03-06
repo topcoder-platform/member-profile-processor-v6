@@ -622,6 +622,7 @@ model Round {
   tcDirectProjectId     Int?      @map("tc_direct_project_id")
   calendarId            Int?      @map("calendar_id")
   modifyDate            DateTime? @map("modify_date")
+  notes                 String?   @db.Text
 
   // Audit fields
   createdAt             DateTime  @default(now()) @map("created_at")
@@ -968,7 +969,9 @@ model LongSubmission {
   componentId           Int       @map("component_id")
   submissionNumber      Int       @map("submission_number")
   submissionText        String?   @map("submission_text") @db.Text
+  openTime              DateTime? @map("open_time")
   submitTime            DateTime? @map("submit_time")
+  submissionPoints      Decimal?  @map("submission_points") @db.Decimal(14, 2)
   languageId            Int?      @map("language_id")
   example               Int?      @default(0)
 
@@ -1047,6 +1050,7 @@ model SystemTestCase {
   args                  String?   @db.Text
   expectedResult        String?   @map("expected_result") @db.Text
   modifyDate            DateTime? @map("modify_date")
+  status                Int?      @default(1)
   example               Int?      @default(0)
   systemFlag            Int?      @default(0) @map("system_flag")
 
@@ -1072,7 +1076,9 @@ model LongSystemTestResult {
   componentId           Int       @map("component_id")
   testCaseId            Int       @map("test_case_id")
   submissionNumber      Int       @map("submission_number")
+  example               Int?      @default(0)
   testAction            String?   @map("test_action") @db.VarChar(10)
+  fatalErrors           Bytes?    @map("fatal_errors") @db.ByteA
   receivedValue         String?   @map("received_value") @db.Text
   score                 Decimal?  @db.Decimal(14, 2)
   processingTime        Int?      @map("processing_time")
